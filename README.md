@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Forkcast
 
-## Getting Started
+AI food tracker and calorie scanner — point your camera at a plate, get an
+instant nutrition estimate, and track calories/macros for the day.
 
-First, run the development server:
+## Stack
+
+Next.js 16 (App Router) · TypeScript · Tailwind v4 · Framer Motion · Recharts ·
+Supabase (Postgres) via Prisma 7 (`@prisma/adapter-pg`) · Anthropic Claude
+(`claude-opus-5`) for the vision scan, with an OpenAI (`gpt-5.5`) fallback and
+a deterministic mock fallback below that.
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env      # fill in DATABASE_URL/DIRECT_URL (Supabase) and SESSION_SECRET
+npx prisma migrate dev    # applies migrations to your Supabase database
+npx prisma db seed        # seeds ~60 foods + a demo user with 2 weeks of history
+npm run dev               # http://localhost:3200
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo login: `demo@forkcast.app` / `demo1234`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are both optional — `/scan` prefers
+Anthropic when set, falls back to OpenAI when only that key is set, and
+otherwise uses a deterministic mock provider (`src/lib/ai/providers/mock.ts`)
+so the app and the E2E suite run with zero cost and zero keys.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Testing
 
-## Learn More
+```bash
+npm run test:e2e
+```
 
-To learn more about Next.js, take a look at the following resources:
+Playwright drives the app on port 3200 across a desktop and a mobile
+viewport, authenticating once as the seeded demo user (`e2e/auth.setup.ts`)
+and reusing that session for the rest of the suite.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project layout
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app` — routes (App Router), grouped into `(auth)` and `(app)` segments
+- `src/components` — UI, feature components, and Recharts wrappers
+- `src/actions` — Server Actions (auth, onboarding, logging, tracking)
+- `src/lib` — DB client, auth/session, AI adapter, nutrition math, queries
+- `prisma/` — schema, migrations, seed script
+- `e2e/` — Playwright specs

@@ -1,26 +1,76 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
+/* ---------- Design tokens ---------- */
+/* Light palette (warm cream + lime) lives on bare :root and is the default
+   look for this app; the explicit [data-theme="dark"] selector lets the
+   next-themes toggle force dark. --accent is a *fill* color (button/pill/bar
+   backgrounds) — lime is too low-contrast to sit directly on cream as text,
+   so --accent-ink carries accent-colored text/icons/strokes/borders instead. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f4f3ee;
+  --surface: #ffffff;
+  --surface-2: #eae8e0;
+  --border: #e4e2d8;
+  --fg: #16170f;
+  --muted: #656857;
+  --accent: #c8f751;
+  --accent-fg: #14210a;
+  --accent-ink: #446d0c;
+  --protein: #1b8fa6;
+  --carbs: #c97a1a;
+  --fat: #c23f63;
+  --radius-card: 28px;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0a0c0a;
+  --surface: #141814;
+  --surface-2: #1c221c;
+  --border: #2a322a;
+  --fg: #f2f5f0;
+  --muted: #8a948a;
+  --accent: #c8f751;
+  --accent-fg: #0a0c08;
+  --accent-ink: #c8f751;
+  --protein: #6ee7f9;
+  --carbs: #fdba5c;
+  --fat: #f97393;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-ink: var(--accent-ink);
+  --color-protein: var(--protein);
+  --color-carbs: var(--carbs);
+  --color-fat: var(--fat);
+  --radius-card: var(--radius-card);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-display);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* Numerals (calorie counters) should use the display face + tabular figures. */
+.font-display {
+  font-feature-settings: "tnum" 1;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-fg);
 }

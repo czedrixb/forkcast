@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Sex {
+  male
+  female
+}
+
+enum ActivityLevel {
+  sedentary
+  light
+  moderate
+  active
+  athlete
+}
+
+enum Goal {
+  lose
+  maintain
+  gain
+}
+
+enum Units {
+  metric
+  imperial
+}
+
+enum MealType {
+  breakfast
+  lunch
+  dinner
+  snack
+}
+
+enum LogSource {
+  manual
+  search
+  scan
+}
+
+enum ScanStatus {
+  pending
+  done
+  failed
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  emailVerifiedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  sessions      Session[]
+  profile       Profile?
+  foods         Food[]
+  logEntries    LogEntry[]
+  scanResults   ScanResult[]
+  weightEntries WeightEntry[]
+  waterEntries  WaterEntry[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Profile {
+  userId         String        @id
+  sex            Sex
+  birthDate      DateTime
+  heightCm       Float
+  weightKg       Float
+  activityLevel  ActivityLevel
+  goal           Goal
+  calorieTarget  Int
+  proteinTarget  Int
+  carbTarget     Int
+  fatTarget      Int
+  units          Units         @default(metric)
+  theme          String        @default("dark")
+  updatedAt      DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Food {
+  id           String   @id @default(cuid())
+  name         String
+  brand        String?
+  servingSize  Float
+  servingUnit  String
+  kcal         Float
+  protein      Float
+  carbs        Float
+  fat          Float
+  fiber        Float?
+  sugar        Float?
+  sodium       Float?
+  isCustom     Boolean  @default(false)
+  userId       String?
+  createdAt    DateTime @default(now())
+
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logEntries LogEntry[]
+
+  @@index([userId])
+  @@index([name])
+}
+
+model LogEntry {
+  id        String    @id @default(cuid())
+  userId    String
+  foodId    String?
+  loggedAt  DateTime  @default(now())
+  mealType  MealType
+  quantity  Float
+  unit      String
+
+  // Denormalized nutrition snapshot at time of logging.
+  kcal      Float
+  protein   Float
+  carbs     Float
+  fat       Float
+
+  source    LogSource @default(manual)
+  imagePath String?
+  createdAt DateTime  @default(now())
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  food Food? @relation(fields: [foodId], references: [id], onDelete: SetNull)
+
+  @@index([userId, loggedAt])
+}
+
+model ScanResult {
+  id           String     @id @default(cuid())
+  userId       String
+  imagePath    String
+  status       ScanStatus @default(pending)
+  detectedJson String?
+  model        String
+  createdAt    DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model WeightEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  recordedAt DateTime @default(now())
+  weightKg   Float
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
+}
+
+model WaterEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  recordedAt DateTime @default(now())
+  ml         Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
+}
