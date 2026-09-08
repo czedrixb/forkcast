@@ -3,7 +3,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { analyzeFoodImage } from "@/lib/ai/analyze";
+import { analyzeFoodImage, NO_PROVIDERS_MESSAGE, NoProvidersAvailableError } from "@/lib/ai/analyze";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -42,26 +42,29 @@ export async function POST(request: Request) {
       userId: user.id,
       imagePath,
       status: "pending",
-      model: process.env.ANTHROPIC_API_KEY
-        ? "claude-opus-5"
-        : process.env.OPENAI_API_KEY
-          ? "gpt-5.5"
-          : "mock",
+      // Real value is filled in once we know which provider actually
+      // answered — see the success branch below.
+      model: "pending",
     },
   });
 
   try {
-    const foods = await analyzeFoodImage({ base64, mimeType: file.type });
+    const { foods, model } = await analyzeFoodImage({ base64, mimeType: file.type });
 
     await db.scanResult.update({
       where: { id: scanResult.id },
-      data: { status: "done", detectedJson: JSON.stringify(foods) },
+      data: { status: "done", detectedJson: JSON.stringify(foods), model: model.model },
     });
 
-    return NextResponse.json({ imagePath, foods });
+    return NextResponse.json({ imagePath, foods, model });
   } catch (error) {
     await db.scanResult.update({ where: { id: scanResult.id }, data: { status: "failed" } });
-    const message = error instanceof Error ? error.message : "Analysis failed";
-    return NextResponse.json({ error: message, imagePath }, { status: 502 });
+
+    if (error instanceof NoProvidersAvailableError) {
+      return NextResponse.json({ error: NO_PROVIDERS_MESSAGE }, { status: 503 });
+    }
+
+    console.error("[scan] unexpected failure", error);
+    return NextResponse.json({ error: "Analysis failed", imagePath }, { status: 502 });
   }
 }

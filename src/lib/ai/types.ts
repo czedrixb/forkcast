@@ -27,3 +27,17 @@ export type AnalyzeImageInput = {
 };
 
 export type AnalyzeImageFn = (input: AnalyzeImageInput) => Promise<DetectedFood[]>;
+
+/** Identifies which provider/model actually produced a scan result. */
+export type AnalysisModel = {
+  provider: "anthropic" | "openai" | "google";
+  /** Raw model id, persisted to ScanResult.model — e.g. "gemini-3.6-flash". */
+  model: string;
+  /** Display copy — e.g. "Gemini 3.6 Flash". */
+  label: string;
+};
+
+export type AnalysisResult = {
+  foods: DetectedFood[];
+  model: AnalysisModel;
+};

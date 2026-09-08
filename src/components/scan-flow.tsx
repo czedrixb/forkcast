@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { ScanCamera } from "@/components/scan-camera";
 import { ScanOverlay } from "@/components/scan-overlay";
 import { DetectedFoodList, scaleFood, type EditableFood } from "@/components/detected-food-list";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { blobToDataUrl, compressImage, dataUrlToBlob } from "@/lib/image";
 import { logDetectedFoods } from "@/actions/log";
+import type { AnalysisModel } from "@/lib/ai/types";
 
 type Stage = "idle" | "preview" | "analyzing" | "results" | "error";
 type MealType = "breakfast" | "lunch" | "dinner" | "snack";
@@ -20,6 +22,7 @@ export function ScanFlow() {
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [items, setItems] = useState<EditableFood[]>([]);
+  const [model, setModel] = useState<AnalysisModel | null>(null);
   const [mealType, setMealType] = useState<MealType>("lunch");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -50,6 +53,7 @@ export function ScanFlow() {
 
       setImagePath(data.imagePath);
       setItems(data.foods.map((f: EditableFood) => ({ ...f, multiplier: 1 })));
+      setModel(data.model);
       setStage("results");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -70,6 +74,7 @@ export function ScanFlow() {
     setImageDataUrl(null);
     setImagePath(null);
     setItems([]);
+    setModel(null);
     setError(null);
   }
 
@@ -95,9 +100,15 @@ export function ScanFlow() {
             <Button variant="outline" size="lg" onClick={reset} disabled={stage === "analyzing"}>
               Retake
             </Button>
-            <Button size="lg" className="flex-1" onClick={handleAnalyze} disabled={stage === "analyzing"}>
-              {stage === "analyzing" ? "Analyzing…" : "Analyze"}
-            </Button>
+            {stage === "error" ? (
+              <Button size="lg" className="flex-1" onClick={() => router.push("/search")}>
+                Add it manually
+              </Button>
+            ) : (
+              <Button size="lg" className="flex-1" onClick={handleAnalyze} disabled={stage === "analyzing"}>
+                {stage === "analyzing" ? "Analyzing…" : "Analyze"}
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -125,6 +136,16 @@ export function ScanFlow() {
               </SelectContent>
             </Select>
           </div>
+
+          {model && (
+            <p
+              data-testid="analysis-model"
+              className="flex items-center gap-1.5 rounded-2xl bg-surface-2 px-4 py-2.5 text-sm text-muted"
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              Analyzed by {model.label}
+            </p>
+          )}
 
           <DetectedFoodList
             items={items}

@@ -7,8 +7,8 @@ instant nutrition estimate, and track calories/macros for the day.
 
 Next.js 16 (App Router) · TypeScript · Tailwind v4 · Framer Motion · Recharts ·
 Supabase (Postgres) via Prisma 7 (`@prisma/adapter-pg`) · Anthropic Claude
-(`claude-opus-5`) for the vision scan, with an OpenAI (`gpt-5.5`) fallback and
-a deterministic mock fallback below that.
+(`claude-opus-5`) for the vision scan, falling back to OpenAI (`gpt-5.5`) and
+then Gemini (`gemini-3.6-flash`) if a call fails.
 
 ## Getting started
 
@@ -22,10 +22,13 @@ npm run dev               # http://localhost:3200
 
 Demo login: `demo@forkcast.app` / `demo1234`.
 
-`ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are both optional — `/scan` prefers
-Anthropic when set, falls back to OpenAI when only that key is set, and
-otherwise uses a deterministic mock provider (`src/lib/ai/providers/mock.ts`)
-so the app and the E2E suite run with zero cost and zero keys.
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `GEMINI_API_KEY` are all optional,
+but at least one is needed for `/scan` to work. It tries Anthropic, then
+OpenAI, then Gemini — falling through to the next configured provider if a
+call fails — and shows a friendly error if none succeed. `GEMINI_API_KEY` is
+free from [Google AI Studio](https://aistudio.google.com/apikey), so it's a
+good zero-cost key to set if you just want to try the scan feature. The E2E
+suite stubs `/api/scan` directly, so it needs none of these keys.
 
 ## Testing
 

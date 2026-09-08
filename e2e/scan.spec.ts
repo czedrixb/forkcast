@@ -1,9 +1,10 @@
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { readConsumed } from "./utils";
+import { readConsumed, stubScanRoute } from "./utils";
 
-test("scanning a photo detects foods and logs them", async ({ page }) => {
-  test.setTimeout(90_000); // real vision providers (plus first-hit dev-server compile) can take noticeably longer than the mock.
+test("scanning a photo detects foods, shows the analyzing model, and logs them", async ({ page }) => {
+  await stubScanRoute(page);
+
   await page.goto("/today");
   const before = await readConsumed(page);
 
@@ -14,7 +15,10 @@ test("scanning a photo detects foods and logs them", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Analyze" })).toBeVisible();
   await page.getByRole("button", { name: "Analyze" }).click();
 
-  await expect(page.getByRole("button", { name: /Log \d+ item/ })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("button", { name: /Log \d+ item/ })).toBeVisible();
+
+  // The results screen attributes the scan to whichever provider answered.
+  await expect(page.getByTestId("analysis-model")).toHaveText(/Analyzed by Gemini 3.6 Flash/);
 
   await page.getByRole("button", { name: /Log \d+ item/ }).click();
   await expect(page).toHaveURL(/\/today/);

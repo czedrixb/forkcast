@@ -77,11 +77,28 @@ async function main() {
     const context = await browser.newContext({ viewport: MOBILE });
     const page = await context.newPage();
     await login(page);
-    // Artificially slow the mock scan response so the scanning-overlay state
-    // is actually catchable in a screenshot — the mock resolves in ~0ms.
+    // Stub the scan response (no mock provider anymore, and we don't want
+    // this script to depend on a real API key) with an artificial delay so
+    // the scanning-overlay state is actually catchable in a screenshot.
     await page.route("**/api/scan", async (route) => {
       await new Promise((r) => setTimeout(r, 1200));
-      await route.continue();
+      await route.fulfill({
+        json: {
+          imagePath: "/uploads/demo/sample-food.jpg",
+          model: { provider: "google", model: "gemini-3.6-flash", label: "Gemini 3.6 Flash" },
+          foods: [
+            {
+              name: "Grilled chicken salad",
+              confidence: 0.91,
+              servingSize: "1 bowl (350g)",
+              kcal: 420,
+              protein: 38,
+              carbs: 22,
+              fat: 18,
+            },
+          ],
+        },
+      });
     });
     await page.goto(`${BASE}/scan`);
     await page
