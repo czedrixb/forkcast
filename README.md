@@ -37,6 +37,32 @@ Playwright drives the app on port 3200 across a desktop and a mobile
 viewport, authenticating once as the seeded demo user (`e2e/auth.setup.ts`)
 and reusing that session for the rest of the suite.
 
+### Testing over HTTPS on the LAN (phone/mobile)
+
+`/scan` needs `getUserMedia`, which browsers only allow in a secure context,
+so testing the camera flow from a phone means serving the app over HTTPS at
+your machine's LAN IP instead of `localhost`.
+
+```bash
+npm run dev:https   # binds to 0.0.0.0:3200 with certificates/localhost*.pem
+```
+
+`next.config.ts` lists the LAN IP in `allowedDevOrigins` — without it, Next's
+dev-only cross-origin protection 403s every JS/RSC asset request from that
+origin and the page renders but never hydrates. Update that IP if your
+machine's LAN IP changes (DHCP).
+
+To verify the LAN-IP origin is actually interactive, run the dedicated
+Playwright config against an already-running `dev:https` server:
+
+```bash
+npx playwright test -c playwright.lan.config.ts
+```
+
+`playwright.lan.config.ts` and `e2e/lan-https.spec.ts` hardcode the LAN IP
+(`https://192.168.1.58:3200`) and are excluded from the default `test:e2e`
+run.
+
 ## Project layout
 
 - `src/app` — routes (App Router), grouped into `(auth)` and `(app)` segments
