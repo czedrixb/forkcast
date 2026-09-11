@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 /** The calorie ring animates its count-up over ~900ms — wait it out before reading. */
 export async function readConsumed(page: Page): Promise<number> {
@@ -71,4 +71,45 @@ export async function stubScanRouteUnavailable(page: Page): Promise<void> {
       },
     }),
   );
+}
+
+/**
+ * Signs up a brand-new user and completes onboarding (same flow as
+ * onboarding.spec.ts), leaving `page` on /today with an authenticated
+ * session. Used by quota specs that need to burn a fresh Free allowance
+ * without touching any other test's credits — call sites must opt out of
+ * the shared demo-user storageState via
+ * `test.use({ storageState: { cookies: [], origins: [] } })`.
+ */
+export async function createFreshUser(page: Page, label: string): Promise<{ email: string }> {
+  const email = `e2e-${label}-${Date.now()}@forkcast.app`;
+
+  await page.goto("/signup");
+  await page.getByLabel("Name").fill("Quota Tester");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("supersecret123");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page).toHaveURL(/\/onboarding/);
+
+  await page.getByText("Lose weight").click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "female" }).click();
+  await page.locator("#birthDateInput").fill("1994-03-15");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.locator("#heightInput").fill("168");
+  await page.locator("#weightInput").fill("63");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByText("Moderate").click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await expect(page.getByTestId("preview-calorie-target")).toHaveText(/\d+/);
+  // See onboarding.spec.ts — a plain .click() here reliably never resolves
+  // its own promise despite the click succeeding server-side.
+  await page.locator('button[type="submit"]').evaluate((el: HTMLButtonElement) => el.click());
+  await expect(page).toHaveURL(/\/today/, { timeout: 15_000 });
+
+  return { email };
 }

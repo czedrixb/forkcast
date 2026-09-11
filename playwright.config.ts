@@ -31,6 +31,14 @@ export default defineConfig({
       // DATABASE_URL/DIRECT_URL come from .env (Supabase) — Next.js loads
       // that file itself, so we don't hardcode a connection string here.
       SESSION_SECRET: "dev-only-secret-change-me-please-1234567890",
+      // Forces the deterministic mock vision provider so quota e2e specs
+      // (e2e/scan-quota.spec.ts) can hit the real /api/scan route without a
+      // real AI key and without real provider cost/flakiness. NOTE:
+      // `reuseExistingServer: true` below means a dev server you already
+      // started by hand (without this var) will be reused as-is — stop any
+      // stray `npm run dev` before running the suite, or these tests will
+      // silently hit real providers instead.
+      AI_PROVIDER: "mock",
     },
   },
   projects: [
