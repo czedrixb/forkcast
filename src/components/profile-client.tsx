@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { addWeight, updateProfileTargets } from "@/actions/tracking";
 import { logout } from "@/actions/auth";
+import type { UsageSummary } from "@/lib/billing/usage";
 
 type Profile = {
   calorieTarget: number;
@@ -20,7 +21,23 @@ type Profile = {
   goal: string;
 };
 
-export function ProfileClient({ name, email, profile }: { name: string; email: string; profile: Profile }) {
+function formatResetDate(value: string | Date): string {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export function ProfileClient({
+  name,
+  email,
+  profile,
+  usage,
+  planLabel,
+}: {
+  name: string;
+  email: string;
+  profile: Profile;
+  usage: UsageSummary;
+  planLabel: string;
+}) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [isPending, startTransition] = useTransition();
@@ -74,6 +91,21 @@ export function ProfileClient({ name, email, profile }: { name: string; email: s
               <Sun className="h-4 w-4" /> Light
             </Button>
           </div>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Plan</CardTitle>
+            <span
+              data-testid="profile-plan-badge"
+              className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium"
+            >
+              {planLabel}
+            </span>
+          </CardHeader>
+          <p data-testid="profile-usage" className="text-sm text-muted">
+            {usage.remaining} of {usage.allowance} scans left this period · resets {formatResetDate(usage.resetAt)}
+          </p>
         </Card>
 
         <Card>

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Zap } from "lucide-react";
 import { ScanCamera } from "@/components/scan-camera";
 import { ScanOverlay } from "@/components/scan-overlay";
 import { DetectedFoodList, scaleFood, type EditableFood } from "@/components/detected-food-list";
@@ -12,11 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { blobToDataUrl, compressImage, dataUrlToBlob } from "@/lib/image";
 import { logDetectedFoods } from "@/actions/log";
 import type { AnalysisModel } from "@/lib/ai/types";
+import type { UsageSummary } from "@/lib/billing/usage";
 
 type Stage = "idle" | "preview" | "analyzing" | "results" | "error";
 type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+type ScanError = { kind: "quota" | "generic"; message: string; resetAt?: string };
 
-export function ScanFlow() {
+function formatResetDate(value: string | Date): string {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export function ScanFlow({ initialUsage }: { initialUsage: UsageSummary }) {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("idle");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
@@ -24,18 +30,25 @@ export function ScanFlow() {
   const [items, setItems] = useState<EditableFood[]>([]);
   const [model, setModel] = useState<AnalysisModel | null>(null);
   const [mealType, setMealType] = useState<MealType>("lunch");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ScanError | null>(null);
+  const [usage, setUsage] = useState(initialUsage);
+  // One key per selected photo: retrying the *same* photo replays the same
+  // request (safe to resend), while picking a new photo always starts a new
+  // analysis. Generated client-side with a fallback for browsers/contexts
+  // without crypto.randomUUID (e.g. non-HTTPS LAN dev).
+  const [requestKey, setRequestKey] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function handleSelect(file: File) {
     const rawDataUrl = await blobToDataUrl(file);
     const compressed = await compressImage(rawDataUrl);
     setImageDataUrl(compressed);
+    setRequestKey(typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
     setStage("preview");
   }
 
   async function handleAnalyze() {
-    if (!imageDataUrl) return;
+    if (!imageDataUrl || !requestKey) return;
     setStage("analyzing");
     setError(null);
 
@@ -43,20 +56,28 @@ export function ScanFlow() {
       const blob = dataUrlToBlob(imageDataUrl);
       const formData = new FormData();
       formData.append("image", blob, "scan.jpg");
+      formData.append("requestKey", requestKey);
 
       const res = await fetch("/api/scan", { method: "POST", body: formData });
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error ?? "Analysis failed");
+        const scanError: ScanError =
+          res.status === 402 && data.code === "SCAN_QUOTA_EXCEEDED"
+            ? { kind: "quota", message: data.error, resetAt: data.resetAt }
+            : { kind: "generic", message: data.error ?? "Analysis failed" };
+        setError(scanError);
+        setStage("error");
+        return;
       }
 
       setImagePath(data.imagePath);
       setItems(data.foods.map((f: EditableFood) => ({ ...f, multiplier: 1 })));
       setModel(data.model);
+      if (data.usage) setUsage(data.usage);
       setStage("results");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError({ kind: "generic", message: err instanceof Error ? err.message : "Something went wrong" });
       setStage("error");
     }
   }
@@ -76,11 +97,20 @@ export function ScanFlow() {
     setItems([]);
     setModel(null);
     setError(null);
+    setRequestKey(null);
   }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col px-5 pt-8">
-      <h1 className="mb-6 font-display text-xl font-semibold">Scan food</h1>
+      <h1 className="mb-2 font-display text-xl font-semibold">Scan food</h1>
+
+      <p
+        data-testid="scan-usage"
+        className="mb-6 flex items-center gap-1.5 rounded-2xl bg-surface-2 px-4 py-2.5 text-sm text-muted"
+      >
+        <Zap className="h-4 w-4 shrink-0" />
+        {usage.remaining} scan{usage.remaining === 1 ? "" : "s"} left · resets {formatResetDate(usage.resetAt)}
+      </p>
 
       {stage === "idle" && <ScanCamera onSelect={handleSelect} />}
 
@@ -93,21 +123,37 @@ export function ScanFlow() {
           </div>
 
           {stage === "error" && error && (
-            <p className="rounded-2xl bg-fat/10 px-4 py-3 text-sm text-fat">{error}</p>
+            <div data-testid="scan-error" className="flex flex-col gap-1 rounded-2xl bg-fat/10 px-4 py-3 text-sm text-fat">
+              <p>{error.message}</p>
+              {error.kind === "quota" && error.resetAt && <p className="text-xs opacity-80">Resets {formatResetDate(error.resetAt)}</p>}
+            </div>
           )}
 
           <div className="flex gap-3">
-            <Button variant="outline" size="lg" onClick={reset} disabled={stage === "analyzing"}>
-              Retake
-            </Button>
-            {stage === "error" ? (
-              <Button size="lg" className="flex-1" onClick={() => router.push("/search")}>
-                Add it manually
-              </Button>
+            {stage === "error" && error?.kind === "quota" ? (
+              <>
+                <Button variant="outline" size="lg" className="flex-1" onClick={() => router.push("/search")}>
+                  Add manually
+                </Button>
+                <Button size="lg" className="flex-1" onClick={() => router.push("/profile")} data-testid="scan-upgrade-cta">
+                  Upgrade
+                </Button>
+              </>
             ) : (
-              <Button size="lg" className="flex-1" onClick={handleAnalyze} disabled={stage === "analyzing"}>
-                {stage === "analyzing" ? "Analyzing…" : "Analyze"}
-              </Button>
+              <>
+                <Button variant="outline" size="lg" onClick={reset} disabled={stage === "analyzing"}>
+                  Retake
+                </Button>
+                {stage === "error" ? (
+                  <Button size="lg" className="flex-1" onClick={() => router.push("/search")}>
+                    Add it manually
+                  </Button>
+                ) : (
+                  <Button size="lg" className="flex-1" onClick={handleAnalyze} disabled={stage === "analyzing"}>
+                    {stage === "analyzing" ? "Analyzing…" : "Analyze"}
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </div>

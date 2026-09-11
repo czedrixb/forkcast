@@ -49,21 +49,47 @@ enum ScanStatus {
   failed
 }
 
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String
-  name          String
-  emailVerifiedAt DateTime?
-  createdAt     DateTime  @default(now())
+enum BillingPlan {
+  free
+  pro
+}
 
-  sessions      Session[]
-  profile       Profile?
-  foods         Food[]
-  logEntries    LogEntry[]
-  scanResults   ScanResult[]
-  weightEntries WeightEntry[]
-  waterEntries  WaterEntry[]
+enum BillingInterval {
+  monthly
+  annual
+}
+
+enum SubscriptionStatus {
+  incomplete
+  active
+  past_due
+  canceled
+}
+
+enum ReservationState {
+  pending
+  consumed
+  released
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  name            String
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  sessions         Session[]
+  profile          Profile?
+  foods            Food[]
+  logEntries       LogEntry[]
+  scanResults      ScanResult[]
+  weightEntries    WeightEntry[]
+  waterEntries     WaterEntry[]
+  subscriptions    Subscription[]
+  usageWindows     UsageWindow[]
+  scanReservations ScanReservation[]
 }
 
 model Session {
@@ -78,42 +104,42 @@ model Session {
 }
 
 model Profile {
-  userId         String        @id
-  sex            Sex
-  birthDate      DateTime
-  heightCm       Float
-  weightKg       Float
-  activityLevel  ActivityLevel
-  goal           Goal
-  calorieTarget  Int
-  proteinTarget  Int
-  carbTarget     Int
-  fatTarget      Int
-  units          Units         @default(metric)
-  theme          String        @default("dark")
-  updatedAt      DateTime      @updatedAt
+  userId        String        @id
+  sex           Sex
+  birthDate     DateTime
+  heightCm      Float
+  weightKg      Float
+  activityLevel ActivityLevel
+  goal          Goal
+  calorieTarget Int
+  proteinTarget Int
+  carbTarget    Int
+  fatTarget     Int
+  units         Units         @default(metric)
+  theme         String        @default("dark")
+  updatedAt     DateTime      @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Food {
-  id           String   @id @default(cuid())
-  name         String
-  brand        String?
-  servingSize  Float
-  servingUnit  String
-  kcal         Float
-  protein      Float
-  carbs        Float
-  fat          Float
-  fiber        Float?
-  sugar        Float?
-  sodium       Float?
-  isCustom     Boolean  @default(false)
-  userId       String?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  name        String
+  brand       String?
+  servingSize Float
+  servingUnit String
+  kcal        Float
+  protein     Float
+  carbs       Float
+  fat         Float
+  fiber       Float?
+  sugar       Float?
+  sodium      Float?
+  isCustom    Boolean  @default(false)
+  userId      String?
+  createdAt   DateTime @default(now())
 
-  user       User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   logEntries LogEntry[]
 
   @@index([userId])
@@ -121,19 +147,19 @@ model Food {
 }
 
 model LogEntry {
-  id        String    @id @default(cuid())
-  userId    String
-  foodId    String?
-  loggedAt  DateTime  @default(now())
-  mealType  MealType
-  quantity  Float
-  unit      String
+  id       String   @id @default(cuid())
+  userId   String
+  foodId   String?
+  loggedAt DateTime @default(now())
+  mealType MealType
+  quantity Float
+  unit     String
 
   // Denormalized nutrition snapshot at time of logging.
-  kcal      Float
-  protein   Float
-  carbs     Float
-  fat       Float
+  kcal    Float
+  protein Float
+  carbs   Float
+  fat     Float
 
   source    LogSource @default(manual)
   imagePath String?
@@ -154,9 +180,89 @@ model ScanResult {
   model        String
   createdAt    DateTime   @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservation ScanReservation?
 
   @@index([userId])
+}
+
+// One row per subscription purchase attempt. History is retained (never
+// overwritten), and access is derived from `paidThroughAt`, not `status`
+// alone -- see src/lib/billing/entitlements.ts. The stripe* columns stay
+// null until Phase 2 (webhook reconciliation) is implemented.
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String
+  interval             BillingInterval
+  status               SubscriptionStatus @default(incomplete)
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  // Null until a payment is actually confirmed. Access requires
+  // `paidThroughAt > now()`, independent of `status`.
+  paidThroughAt        DateTime?
+  // Anchors annual Pro's monthly usage windows to the original purchase
+  // date -- see monthBoundsFromAnchor in src/lib/billing/usage.ts.
+  usageAnchorAt        DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String?
+  stripePriceId        String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, paidThroughAt])
+}
+
+// One allowance window per user/kind/plan/period. Free and Pro windows for
+// the same user coexist (keyed by `plan`) so downgrading never resets the
+// still-running Free window, and re-upgrading starts a fresh Pro one.
+model UsageWindow {
+  id        String      @id @default(cuid())
+  userId    String
+  kind      String // "scan" -- the only kind today, kept as string for future allowance types
+  plan      BillingPlan
+  startsAt  DateTime
+  endsAt    DateTime
+  // Named `allowance`, not `limit` -- LIMIT is a reserved word in the raw
+  // SQL used to atomically claim a reservation (see usage.ts).
+  allowance Int
+  consumed  Int         @default(0)
+  reserved  Int         @default(0)
+  createdAt DateTime    @default(now())
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservations ScanReservation[]
+
+  @@unique([userId, kind, plan, startsAt])
+  @@index([userId, kind, endsAt])
+}
+
+// One row per scan request key. Lets a retried/duplicated request replay the
+// exact original response instead of spending another credit or calling AI
+// again, and caps a user to one in-flight analysis at a time.
+model ScanReservation {
+  id           String           @id @default(cuid())
+  userId       String
+  requestKey   String
+  windowId     String
+  state        ReservationState @default(pending)
+  scanResultId String?          @unique
+  // Exact 200 response body for a completed scan, so a duplicate request
+  // key can be replayed byte-for-byte without re-deriving it from
+  // ScanResult (whose `model` column only stores the model id string).
+  responseJson String?
+  createdAt    DateTime         @default(now())
+  settledAt    DateTime?
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  window     UsageWindow @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  scanResult ScanResult? @relation(fields: [scanResultId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, requestKey])
+  @@index([state, createdAt])
 }
 
 model WeightEntry {
