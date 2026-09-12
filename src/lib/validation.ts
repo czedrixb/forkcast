@@ -49,3 +49,9 @@ export const WeightEntrySchema = z.object({
 export const WaterEntrySchema = z.object({
   ml: z.coerce.number().int().positive().max(5000),
 });
+
+// Deliberately just the interval enum -- never a client-supplied price id or
+// amount. src/lib/billing/stripe.ts maps this to the allowlisted Stripe Price ID.
+export const CheckoutSchema = z.object({
+  interval: z.enum(["monthly", "annual"]),
+});

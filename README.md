@@ -30,6 +30,32 @@ free from [Google AI Studio](https://aistudio.google.com/apikey), so it's a
 good zero-cost key to set if you just want to try the scan feature. The E2E
 suite stubs `/api/scan` directly, so it needs none of these keys.
 
+## Paywall (Stripe, test mode only)
+
+Free gives 5 AI scans/month; Pro (PHP 399/month or PHP 3,990/year) gives 100.
+`/pricing` and the billing status screens always read "Demo checkout — no
+real charges" and label the entitlement "Pro · Demo" — this deployment
+refuses live Stripe keys and live webhook events (see
+`src/lib/billing/stripe.ts`).
+
+Without Stripe env vars set, `/pricing` shows "Checkout unavailable" and Free
+access still works normally — nothing breaks. To exercise real Stripe test
+checkout locally, uncomment and fill in the Stripe block in `.env.example`
+(instructions inline) and run:
+
+```bash
+stripe listen --forward-to localhost:3200/api/stripe/webhook   # copy the signing secret into STRIPE_WEBHOOK_SECRET
+```
+
+To grant Pro without going through Stripe at all (e.g. to check the success
+screen), use the dev-only stand-in script:
+
+```bash
+npx tsx scripts/grant-pro.ts <email> [monthly|annual]
+```
+
+See `docs/stripe-paywall-plan.md` for the full design.
+
 ## Testing
 
 ```bash
@@ -74,3 +100,5 @@ run.
 - `src/lib` — DB client, auth/session, AI adapter, nutrition math, queries
 - `prisma/` — schema, migrations, seed script
 - `e2e/` — Playwright specs
+- `scripts/` — dev-only helper scripts (e.g. `grant-pro.ts`)
+- `docs/` — design/planning docs (e.g. the Stripe paywall plan)

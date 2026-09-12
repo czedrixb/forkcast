@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Sparkles, Zap } from "lucide-react";
 import { ScanCamera } from "@/components/scan-camera";
+import { ScanQuotaSheet } from "@/components/scan-quota-sheet";
 import { ScanOverlay } from "@/components/scan-overlay";
 import { DetectedFoodList, scaleFood, type EditableFood } from "@/components/detected-food-list";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ export function ScanFlow({ initialUsage }: { initialUsage: UsageSummary }) {
   // without crypto.randomUUID (e.g. non-HTTPS LAN dev).
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [quotaSheetOpen, setQuotaSheetOpen] = useState(false);
+  const quotaExceeded = usage.remaining <= 0;
 
   async function handleSelect(file: File) {
     const rawDataUrl = await blobToDataUrl(file);
@@ -112,7 +115,11 @@ export function ScanFlow({ initialUsage }: { initialUsage: UsageSummary }) {
         {usage.remaining} scan{usage.remaining === 1 ? "" : "s"} left · resets {formatResetDate(usage.resetAt)}
       </p>
 
-      {stage === "idle" && <ScanCamera onSelect={handleSelect} />}
+      {stage === "idle" && (
+        <ScanCamera onSelect={handleSelect} quotaExceeded={quotaExceeded} onBlocked={() => setQuotaSheetOpen(true)} />
+      )}
+
+      <ScanQuotaSheet open={quotaSheetOpen} onOpenChange={setQuotaSheetOpen} resetAt={usage.resetAt} />
 
       {(stage === "preview" || stage === "analyzing" || stage === "error") && imageDataUrl && (
         <div className="flex flex-col gap-5">
@@ -135,7 +142,7 @@ export function ScanFlow({ initialUsage }: { initialUsage: UsageSummary }) {
                 <Button variant="outline" size="lg" className="flex-1" onClick={() => router.push("/search")}>
                   Add manually
                 </Button>
-                <Button size="lg" className="flex-1" onClick={() => router.push("/profile")} data-testid="scan-upgrade-cta">
+                <Button size="lg" className="flex-1" onClick={() => router.push("/pricing?from=scan")} data-testid="scan-upgrade-cta">
                   Upgrade
                 </Button>
               </>

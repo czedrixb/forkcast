@@ -31,8 +31,16 @@ export const PLAN_LABELS: Record<"free" | "pro", string> = {
   pro: "Pro · Demo",
 };
 
-/** Proposed PHP prices from docs/stripe-paywall-plan.md -- not wired to Stripe yet. */
+/** Proposed PHP prices from docs/stripe-paywall-plan.md. Source of truth for both the pricing page and the allowlisted Stripe Price IDs in src/lib/billing/stripe.ts. */
 export const PLAN_PRICING = {
   monthly: { amountPhp: 399, allowance: PRO_SCAN_ALLOWANCE },
   annual: { amountPhp: 3990, allowance: PRO_SCAN_ALLOWANCE },
 } as const;
+
+/**
+ * Annual's monthly-equivalent price and savings versus paying monthly for a
+ * year, derived from PLAN_PRICING so the pricing page can never state a
+ * number that drifts from what's actually charged.
+ */
+export const ANNUAL_MONTHLY_EQUIVALENT_PHP = Math.round(PLAN_PRICING.annual.amountPhp / 12);
+export const ANNUAL_SAVINGS_PHP = PLAN_PRICING.monthly.amountPhp * 12 - PLAN_PRICING.annual.amountPhp;

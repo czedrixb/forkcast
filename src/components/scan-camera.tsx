@@ -7,7 +7,17 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 type CameraState = "idle" | "requesting" | "streaming" | "denied" | "error";
 
-export function ScanCamera({ onSelect }: { onSelect: (file: File) => void }) {
+export function ScanCamera({
+  onSelect,
+  quotaExceeded = false,
+  onBlocked,
+}: {
+  onSelect: (file: File) => void;
+  /** True once the user has zero scans left this period -- blocks the camera/upload actions before they open. */
+  quotaExceeded?: boolean;
+  /** Called instead of opening the camera/file picker when quotaExceeded is true. */
+  onBlocked?: () => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -22,6 +32,11 @@ export function ScanCamera({ onSelect }: { onSelect: (file: File) => void }) {
   }
 
   async function openCamera() {
+    if (quotaExceeded) {
+      onBlocked?.();
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       // No live-camera support — fall back to letting the OS handle it via the file picker.
       inputRef.current?.setAttribute("capture", "environment");
@@ -112,6 +127,10 @@ export function ScanCamera({ onSelect }: { onSelect: (file: File) => void }) {
           size="lg"
           className="w-full"
           onClick={() => {
+            if (quotaExceeded) {
+              onBlocked?.();
+              return;
+            }
             inputRef.current?.removeAttribute("capture");
             inputRef.current?.click();
           }}

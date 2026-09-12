@@ -39,6 +39,13 @@ export default defineConfig({
       // stray `npm run dev` before running the suite, or these tests will
       // silently hit real providers instead.
       AI_PROVIDER: "mock",
+      // Deliberately no STRIPE_SECRET_KEY/STRIPE_PRICE_PRO_*/APP_URL — the
+      // suite exercises the "Checkout unavailable" state, which is what a
+      // real deployment without Stripe sandbox access shows too. A dummy
+      // webhook secret is set so signature *verification* itself (forged
+      // signatures rejected with 400) can still be tested without real
+      // Stripe webhook delivery — see e2e/paywall.spec.ts.
+      STRIPE_WEBHOOK_SECRET: "whsec_e2e_dummy_secret_not_real",
     },
   },
   projects: [

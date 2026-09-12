@@ -21,7 +21,7 @@ import { db } from "@/lib/db";
 const COOKIE_NAME = "forkcast_session";
 
 const AUTH_ONLY_ROUTES = ["/login", "/signup"];
-const PROTECTED_PREFIXES = ["/today", "/scan", "/search", "/insights", "/profile", "/onboarding"];
+const PROTECTED_PREFIXES = ["/today", "/scan", "/search", "/insights", "/profile", "/onboarding", "/pricing", "/billing"];
 
 async function verifySessionCookie(request: NextRequest): Promise<string | null> {
   const token = request.cookies.get(COOKIE_NAME)?.value;
